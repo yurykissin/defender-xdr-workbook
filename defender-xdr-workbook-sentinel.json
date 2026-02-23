@@ -23,14 +23,15 @@
         "description": "Location for the workbook resource"
       }
     },
-    "workspaceResourceId": {
+    "workspaceName": {
       "type": "string",
       "metadata": {
-        "description": "Resource ID of the Log Analytics workspace with Microsoft Sentinel enabled (e.g. /subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/...)"
+        "description": "Name of the Log Analytics workspace with Microsoft Sentinel enabled (must be in the same resource group as this deployment)"
       }
     }
   },
   "variables": {
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
     "workbookContent": {
       "version": "Notebook/1.0",
       "items": [
@@ -706,9 +707,9 @@
       "kind": "shared",
       "properties": {
         "displayName": "[parameters('workbookDisplayName')]",
-        "serializedData": "[replace(string(variables('workbookContent')), '%%WORKSPACE_ID%%', parameters('workspaceResourceId'))]",
+        "serializedData": "[replace(string(variables('workbookContent')), '%%WORKSPACE_ID%%', variables('workspaceResourceId'))]",
         "version": "1.0",
-        "sourceId": "[parameters('workspaceResourceId')]",
+        "sourceId": "[variables('workspaceResourceId')]",
         "category": "sentinel"
       }
     }

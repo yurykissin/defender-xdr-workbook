@@ -27,7 +27,7 @@ If you have Microsoft Sentinel enabled, deploy this version to view the workbook
 
 [![Deploy Sentinel Workbook](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyurykissin%2Fdefender-xdr-workbook%2Fmain%2Fdefender-xdr-workbook-sentinel.json)
 
-> Requires the full resource ID of your Sentinel-enabled Log Analytics workspace (e.g., `/subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/...`).
+> Deploy to the **same resource group** as your Sentinel-enabled Log Analytics workspace. Enter just the workspace **name** (not the full resource ID).
 
 ### Dashboard Sections
 
