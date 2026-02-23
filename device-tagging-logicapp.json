@@ -61,6 +61,13 @@
       "metadata": {
         "description": "Devices seen within this many days are considered active"
       }
+    },
+    "dryRun": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "When true (default), the Logic App only queries and logs — no tags are added or removed. Set to false to enable tagging."
+      }
     }
   },
   "variables": {
@@ -98,6 +105,9 @@
             },
             "RecurrenceFrequency": {
               "type": "String"
+            },
+            "DryRun": {
+              "type": "Bool"
             }
           },
           "triggers": {
@@ -141,7 +151,7 @@
                   "Content-Type": "application/json"
                 },
                 "body": {
-                  "Query": "DeviceInfo | where Timestamp > ago(90d) | summarize arg_max(Timestamp, *) by DeviceId | where MachineGroup has '@{parameters('TagName')}' or MachineTags has '@{parameters('TagName')}' | project DeviceId"
+                  "Query": "DeviceInfo | where Timestamp > ago(90d) | summarize arg_max(Timestamp, *) by DeviceId | where DeviceManualTags has '@{parameters('TagName')}' | project DeviceId"
                 },
                 "authentication": {
                   "type": "ActiveDirectoryOAuth",
@@ -242,25 +252,43 @@
                   },
                   "actions": {
                     "Add_Tag": {
-                      "type": "Http",
-                      "inputs": {
-                        "uri": "https://api.security.microsoft.com/api/machines/@{items('Tag_Active_Untagged_Devices')?['DeviceId']}/tags",
-                        "method": "POST",
-                        "headers": {
-                          "Content-Type": "application/json"
-                        },
-                        "body": {
-                          "Value": "@{parameters('TagName')}",
-                          "Action": "Add"
-                        },
-                        "authentication": {
-                          "type": "ActiveDirectoryOAuth",
-                          "authority": "",
-                          "tenant": "@{parameters('TenantID')}",
-                          "audience": "https://api.security.microsoft.com",
-                          "clientId": "@{parameters('ClientID')}",
-                          "secret": "@{parameters('Secret')}"
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@parameters('DryRun')",
+                              false
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Add_Tag_HTTP": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "https://api.security.microsoft.com/api/machines/@{items('Tag_Active_Untagged_Devices')?['DeviceId']}/tags",
+                            "method": "POST",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "Value": "@{parameters('TagName')}",
+                              "Action": "Add"
+                            },
+                            "authentication": {
+                              "type": "ActiveDirectoryOAuth",
+                              "authority": "",
+                              "tenant": "@{parameters('TenantID')}",
+                              "audience": "https://api.security.microsoft.com",
+                              "clientId": "@{parameters('ClientID')}",
+                              "secret": "@{parameters('Secret')}"
+                            }
+                          }
                         }
+                      },
+                      "else": {
+                        "actions": {}
                       }
                     }
                   },
@@ -303,25 +331,43 @@
                   },
                   "actions": {
                     "Remove_Tag": {
-                      "type": "Http",
-                      "inputs": {
-                        "uri": "https://api.security.microsoft.com/api/machines/@{items('Untag_Inactive_Devices')?['DeviceId']}/tags",
-                        "method": "POST",
-                        "headers": {
-                          "Content-Type": "application/json"
-                        },
-                        "body": {
-                          "Value": "@{parameters('TagName')}",
-                          "Action": "Remove"
-                        },
-                        "authentication": {
-                          "type": "ActiveDirectoryOAuth",
-                          "authority": "",
-                          "tenant": "@{parameters('TenantID')}",
-                          "audience": "https://api.security.microsoft.com",
-                          "clientId": "@{parameters('ClientID')}",
-                          "secret": "@{parameters('Secret')}"
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "equals": [
+                              "@parameters('DryRun')",
+                              false
+                            ]
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Remove_Tag_HTTP": {
+                          "type": "Http",
+                          "inputs": {
+                            "uri": "https://api.security.microsoft.com/api/machines/@{items('Untag_Inactive_Devices')?['DeviceId']}/tags",
+                            "method": "POST",
+                            "headers": {
+                              "Content-Type": "application/json"
+                            },
+                            "body": {
+                              "Value": "@{parameters('TagName')}",
+                              "Action": "Remove"
+                            },
+                            "authentication": {
+                              "type": "ActiveDirectoryOAuth",
+                              "authority": "",
+                              "tenant": "@{parameters('TenantID')}",
+                              "audience": "https://api.security.microsoft.com",
+                              "clientId": "@{parameters('ClientID')}",
+                              "secret": "@{parameters('Secret')}"
+                            }
+                          }
                         }
+                      },
+                      "else": {
+                        "actions": {}
                       }
                     }
                   },
@@ -367,6 +413,9 @@
           },
           "RecurrenceFrequency": {
             "value": "[parameters('recurrenceFrequency')]"
+          },
+          "DryRun": {
+            "value": "[parameters('dryRun')]"
           }
         }
       }

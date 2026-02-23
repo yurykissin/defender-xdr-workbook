@@ -33,6 +33,8 @@ Runs weekly, queries MDE Advanced Hunting for active devices (seen in last 7 day
 - **Adds** the tag to devices that are active but not yet tagged
 - **Removes** the tag from devices that are no longer active
 
+> **⚠️ Deploys in dry-run mode by default.** The Logic App will query and identify devices but will **not** add or remove any tags. To enable tagging, set the `dryRun` parameter to `false` during deployment (or redeploy with it set to `false` after verifying the run history).
+
 ## Prerequisites
 
 1. **Log Analytics Workspace** connected to Microsoft Defender for Endpoint
