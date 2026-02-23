@@ -560,6 +560,68 @@
         {
           "type": 1,
           "content": {
+            "json": "## ✅ Active Devices\nDevices seen in the last 7 days with an Active sensor health state."
+          },
+          "name": "section-active"
+        },
+        {
+          "type": 3,
+          "content": {
+            "version": "KqlItem/1.0",
+            "query": "DeviceInfo\n| where Timestamp > ago(7d)\n| summarize arg_max(Timestamp, *) by DeviceId\n| where SensorHealthState == \"Active\"\n| summarize\n    ActiveDevices = dcount(DeviceId),\n    Windows = dcountif(DeviceId, OSPlatform startswith \"Windows\"),\n    Linux = dcountif(DeviceId, OSPlatform startswith \"Linux\"),\n    MacOS = dcountif(DeviceId, OSPlatform == \"macOS\")",
+            "size": 4,
+            "title": "Active Device Summary",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "visualization": "tiles",
+            "tileSettings": {
+              "titleContent": {
+                "columnMatch": "Column1",
+                "formatter": 1
+              },
+              "leftContent": {
+                "columnMatch": "ActiveDevices",
+                "formatter": 12,
+                "formatOptions": {
+                  "palette": "auto"
+                }
+              },
+              "showBorder": true
+            },
+            "crossComponentResources": [
+              "{Workspace}"
+            ]
+          },
+          "name": "active-summary-tiles"
+        },
+        {
+          "type": 3,
+          "content": {
+            "version": "KqlItem/1.0",
+            "query": "DeviceInfo\n| where Timestamp > ago(7d)\n| summarize arg_max(Timestamp, *) by DeviceId\n| where SensorHealthState == \"Active\"\n| project\n    DeviceName,\n    OSPlatform,\n    OSVersionInfo,\n    LastSeen = Timestamp,\n    OnboardingStatus,\n    MachineGroup,\n    PublicIP,\n    IsInternetFacing\n| sort by DeviceName asc",
+            "size": 0,
+            "title": "Active Device List",
+            "queryType": 0,
+            "resourceType": "microsoft.operationalinsights/workspaces",
+            "visualization": "table",
+            "gridSettings": {
+              "formatters": [
+                {
+                  "columnMatch": "LastSeen",
+                  "formatter": 6
+                }
+              ],
+              "filter": true
+            },
+            "crossComponentResources": [
+              "{Workspace}"
+            ]
+          },
+          "name": "active-devices-table"
+        },
+        {
+          "type": 1,
+          "content": {
             "json": "## 📈 Active Fleet Health"
           },
           "name": "section-fleet"

@@ -1,0 +1,381 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logicAppName": {
+      "type": "string",
+      "defaultValue": "MDE-ActiveDevice-Tagger",
+      "metadata": {
+        "description": "Name of the Logic App"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for the Logic App"
+      }
+    },
+    "tenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Azure AD Tenant ID"
+      }
+    },
+    "clientId": {
+      "type": "string",
+      "metadata": {
+        "description": "App Registration Client ID with Machine.ReadWrite.All permission"
+      }
+    },
+    "clientSecret": {
+      "type": "secureString",
+      "metadata": {
+        "description": "App Registration Client Secret"
+      }
+    },
+    "recurrenceInterval": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "How often the Logic App runs"
+      }
+    },
+    "recurrenceFrequency": {
+      "type": "string",
+      "defaultValue": "Week",
+      "allowedValues": [
+        "Month",
+        "Week",
+        "Day",
+        "Hour"
+      ],
+      "metadata": {
+        "description": "Frequency unit for recurrence"
+      }
+    },
+    "activeThresholdDays": {
+      "type": "int",
+      "defaultValue": 7,
+      "metadata": {
+        "description": "Devices seen within this many days are considered active"
+      }
+    }
+  },
+  "variables": {
+    "tagName": "ActiveDevice"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('logicAppName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "TenantID": {
+              "type": "String"
+            },
+            "ClientID": {
+              "type": "String"
+            },
+            "Secret": {
+              "type": "SecureString"
+            },
+            "ActiveThresholdDays": {
+              "type": "Int"
+            },
+            "TagName": {
+              "type": "String"
+            },
+            "RecurrenceInterval": {
+              "type": "Int"
+            },
+            "RecurrenceFrequency": {
+              "type": "String"
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "type": "Recurrence",
+              "recurrence": {
+                "interval": "@parameters('RecurrenceInterval')",
+                "frequency": "@parameters('RecurrenceFrequency')"
+              }
+            }
+          },
+          "actions": {
+            "Query_Active_Devices": {
+              "type": "Http",
+              "inputs": {
+                "uri": "https://api.security.microsoft.com/api/advancedhunting/run",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "Query": "DeviceInfo | where Timestamp > ago(@{parameters('ActiveThresholdDays')}d) | summarize arg_max(Timestamp, *) by DeviceId | where SensorHealthState == 'Active' | project DeviceId"
+                },
+                "authentication": {
+                  "type": "ActiveDirectoryOAuth",
+                  "authority": "",
+                  "tenant": "@{parameters('TenantID')}",
+                  "audience": "https://api.security.microsoft.com",
+                  "clientId": "@{parameters('ClientID')}",
+                  "secret": "@{parameters('Secret')}"
+                }
+              },
+              "runAfter": {}
+            },
+            "Query_Currently_Tagged_Devices": {
+              "type": "Http",
+              "inputs": {
+                "uri": "https://api.security.microsoft.com/api/advancedhunting/run",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "Query": "DeviceInfo | where Timestamp > ago(90d) | summarize arg_max(Timestamp, *) by DeviceId | where MachineGroup has '@{parameters('TagName')}' or MachineTags has '@{parameters('TagName')}' | project DeviceId"
+                },
+                "authentication": {
+                  "type": "ActiveDirectoryOAuth",
+                  "authority": "",
+                  "tenant": "@{parameters('TenantID')}",
+                  "audience": "https://api.security.microsoft.com",
+                  "clientId": "@{parameters('ClientID')}",
+                  "secret": "@{parameters('Secret')}"
+                }
+              },
+              "runAfter": {}
+            },
+            "Parse_Active_Devices": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Query_Active_Devices')?['Results']",
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "DeviceId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Query_Active_Devices": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Parse_Tagged_Devices": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Query_Currently_Tagged_Devices')?['Results']",
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "DeviceId": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Query_Currently_Tagged_Devices": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Build_Active_Device_IDs": {
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Parse_Active_Devices')",
+                "select": "@item()?['DeviceId']"
+              },
+              "runAfter": {
+                "Parse_Active_Devices": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Build_Tagged_Device_IDs": {
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Parse_Tagged_Devices')",
+                "select": "@item()?['DeviceId']"
+              },
+              "runAfter": {
+                "Parse_Tagged_Devices": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Tag_Active_Untagged_Devices": {
+              "type": "Foreach",
+              "foreach": "@body('Parse_Active_Devices')",
+              "actions": {
+                "Check_If_Already_Tagged": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "contains": [
+                            "@body('Build_Tagged_Device_IDs')",
+                            "@items('Tag_Active_Untagged_Devices')?['DeviceId']"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Add_Tag": {
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "https://api.security.microsoft.com/api/machines/@{items('Tag_Active_Untagged_Devices')?['DeviceId']}/tags",
+                        "method": "POST",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "Value": "@{parameters('TagName')}",
+                          "Action": "Add"
+                        },
+                        "authentication": {
+                          "type": "ActiveDirectoryOAuth",
+                          "authority": "",
+                          "tenant": "@{parameters('TenantID')}",
+                          "audience": "https://api.security.microsoft.com",
+                          "clientId": "@{parameters('ClientID')}",
+                          "secret": "@{parameters('Secret')}"
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              },
+              "runAfter": {
+                "Build_Active_Device_IDs": [
+                  "Succeeded"
+                ],
+                "Build_Tagged_Device_IDs": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 5
+                }
+              }
+            },
+            "Untag_Inactive_Devices": {
+              "type": "Foreach",
+              "foreach": "@body('Parse_Tagged_Devices')",
+              "actions": {
+                "Check_If_Still_Active": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "contains": [
+                            "@body('Build_Active_Device_IDs')",
+                            "@items('Untag_Inactive_Devices')?['DeviceId']"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Remove_Tag": {
+                      "type": "Http",
+                      "inputs": {
+                        "uri": "https://api.security.microsoft.com/api/machines/@{items('Untag_Inactive_Devices')?['DeviceId']}/tags",
+                        "method": "POST",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "Value": "@{parameters('TagName')}",
+                          "Action": "Remove"
+                        },
+                        "authentication": {
+                          "type": "ActiveDirectoryOAuth",
+                          "authority": "",
+                          "tenant": "@{parameters('TenantID')}",
+                          "audience": "https://api.security.microsoft.com",
+                          "clientId": "@{parameters('ClientID')}",
+                          "secret": "@{parameters('Secret')}"
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              },
+              "runAfter": {
+                "Build_Active_Device_IDs": [
+                  "Succeeded"
+                ],
+                "Build_Tagged_Device_IDs": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 5
+                }
+              }
+            }
+          }
+        },
+        "parameters": {
+          "TenantID": {
+            "value": "[parameters('tenantId')]"
+          },
+          "ClientID": {
+            "value": "[parameters('clientId')]"
+          },
+          "Secret": {
+            "value": "[parameters('clientSecret')]"
+          },
+          "ActiveThresholdDays": {
+            "value": "[parameters('activeThresholdDays')]"
+          },
+          "TagName": {
+            "value": "[variables('tagName')]"
+          },
+          "RecurrenceInterval": {
+            "value": "[parameters('recurrenceInterval')]"
+          },
+          "RecurrenceFrequency": {
+            "value": "[parameters('recurrenceFrequency')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "logicAppName": {
+      "type": "string",
+      "value": "[parameters('logicAppName')]"
+    }
+  }
+}
