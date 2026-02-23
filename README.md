@@ -31,8 +31,10 @@ Azure Monitor Workbook that provides a comprehensive dashboard for monitoring Mi
 
 1. Go to the Azure Portal → your Resource Group
 2. Open the **Workbook** resource
-3. Adjust the **Time Range** and **Stale Threshold (days)** parameters as needed
-4. Pin the workbook to your Azure Dashboard for quick access
+3. Select your **Subscription** from the dropdown at the top
+4. Select your **Log Analytics Workspace** from the dropdown
+5. Adjust the **Time Range** and **Stale Threshold (days)** parameters as needed
+6. Pin the workbook to your Azure Dashboard for quick access
 
 ## Files
 
