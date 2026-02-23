@@ -538,7 +538,7 @@
                 "actions": {}
               },
               "runAfter": {
-                "Send_Report_Email": [ "Succeeded" ],
+                "Build_Report": [ "Succeeded" ],
                 "Build_Active_Device_IDs": [ "Succeeded" ],
                 "Build_Tagged_Device_IDs": [ "Succeeded" ]
               }
