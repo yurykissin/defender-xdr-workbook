@@ -21,6 +21,14 @@ An Azure Monitor Workbook that queries MDE Advanced Hunting data via a Log Analy
 
 [![Deploy Workbook](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyurykissin%2Fdefender-xdr-workbook%2Fmain%2Fdefender-xdr-workbook.json)
 
+#### Sentinel Version (visible in Defender portal)
+
+If you have Microsoft Sentinel enabled, deploy this version to view the workbook in `security.microsoft.com` → **Microsoft Sentinel** → **Threat Management** → **Workbooks**:
+
+[![Deploy Sentinel Workbook](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyurykissin%2Fdefender-xdr-workbook%2Fmain%2Fdefender-xdr-workbook-sentinel.json)
+
+> Requires the full resource ID of your Sentinel-enabled Log Analytics workspace (e.g., `/subscriptions/.../resourceGroups/.../providers/Microsoft.OperationalInsights/workspaces/...`).
+
 ### Dashboard Sections
 
 | Section | What it shows |
@@ -197,6 +205,7 @@ The Logic App authenticates against two Microsoft APIs:
 | File | Description |
 |------|-------------|
 | `defender-xdr-workbook.json` | ARM template — Azure Monitor Workbook with all dashboard sections |
+| `defender-xdr-workbook-sentinel.json` | ARM template — Same workbook for Microsoft Sentinel (visible in Defender portal) |
 | `device-tagging-logicapp.json` | ARM template — Logic App + O365 connection for device reporting and tagging |
 | `defender-xdr-dashboards.kql` | Standalone KQL queries for Advanced Hunting (reference / manual use) |
 
