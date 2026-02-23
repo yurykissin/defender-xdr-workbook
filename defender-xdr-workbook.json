@@ -31,7 +31,7 @@
         {
           "type": 1,
           "content": {
-            "json": "# 🛡️ MDE Device Hygiene & Health Dashboard\n---\nMonitors ~2K Azure VMs with manually onboarded Defender for Endpoint agents.\nIdentifies stale/ghost devices, unhealthy sensors, and network connectivity issues."
+            "json": "# MDE Device Hygiene & Health Dashboard\n---\nMonitors ~2K Azure VMs with manually onboarded Defender for Endpoint agents.\nIdentifies stale/ghost devices, unhealthy sensors, and network connectivity issues."
           },
           "name": "header"
         },
@@ -128,7 +128,7 @@
         {
           "type": 1,
           "content": {
-            "json": "## 📊 Overview"
+            "json": "## Overview"
           },
           "name": "section-overview"
         },
@@ -166,7 +166,7 @@
           "type": 3,
           "content": {
             "version": "KqlItem/1.0",
-            "query": "DeviceInfo\n| where Timestamp > ago(1d)\n| summarize arg_max(Timestamp, *) by DeviceId\n| summarize Count = dcount(DeviceId) by SensorHealthState\n| sort by Count desc",
+            "query": "DeviceInfo\n| where Timestamp > ago(1d)\n| summarize arg_max(Timestamp, *) by DeviceId\n| extend SensorHealthState = iff(isempty(SensorHealthState), \"Unknown\", SensorHealthState)\n| summarize Count = count() by SensorHealthState\n| sort by Count desc",
             "size": 2,
             "title": "Sensor Health Distribution",
             "queryType": 0,
@@ -203,7 +203,7 @@
           "type": 3,
           "content": {
             "version": "KqlItem/1.0",
-            "query": "DeviceInfo\n| where Timestamp > ago(1d)\n| summarize arg_max(Timestamp, *) by DeviceId\n| summarize Count = dcount(DeviceId) by OSPlatform\n| sort by Count desc",
+            "query": "DeviceInfo\n| where Timestamp > ago(1d)\n| summarize arg_max(Timestamp, *) by DeviceId\n| summarize Count = count() by OSPlatform\n| sort by Count desc",
             "size": 2,
             "title": "OS Platform Distribution",
             "queryType": 0,
@@ -219,7 +219,7 @@
         {
           "type": 1,
           "content": {
-            "json": "## 👻 Stale & Ghost Devices\nDevices not seen in {StaleThresholdDays}+ days — likely decommissioned VMs creating phantom entries."
+            "json": "## Stale & Ghost Devices\nDevices not seen in {StaleThresholdDays}+ days — likely decommissioned VMs creating phantom entries."
           },
           "name": "section-stale"
         },
@@ -312,7 +312,7 @@
         {
           "type": 1,
           "content": {
-            "json": "## 🔴 Unhealthy Devices\nActive VMs reporting a non-Active sensor state — likely blocked network traffic."
+            "json": "## Unhealthy Devices\nActive VMs reporting a non-Active sensor state — likely blocked network traffic."
           },
           "name": "section-unhealthy"
         },
@@ -375,7 +375,7 @@
             "version": "KqlItem/1.0",
             "query": "DeviceInfo\n| summarize arg_max(Timestamp, *) by DeviceId\n| where OnboardingStatus == \"Onboarded\"\n| where SensorHealthState != \"Active\" and SensorHealthState != \"\"\n| where Timestamp > ago(30d)\n| project\n    DeviceId,\n    DeviceName,\n    OSPlatform,\n    SensorHealthState,\n    OnboardingStatus,\n    LastSeen = Timestamp,\n    DaysSinceLastSeen = datetime_diff('day', now(), Timestamp),\n    PublicIP,\n    MachineGroup\n| sort by DaysSinceLastSeen desc",
             "size": 0,
-            "title": "Onboarded But Never Healthy (Terraform onboarded, agent never connected)",
+            "title": "Onboarded But Never Healthy (agent never connected)",
             "queryType": 0,
             "resourceType": "microsoft.operationalinsights/workspaces",
             "visualization": "table",
@@ -402,7 +402,7 @@
         {
           "type": 1,
           "content": {
-            "json": "## 🌐 Network Connectivity\nDevices failing to reach MDE cloud endpoints — root cause of unhealthy sensors."
+            "json": "## Network Connectivity\nDevices failing to reach MDE cloud endpoints — root cause of unhealthy sensors."
           },
           "name": "section-network"
         },
@@ -493,7 +493,7 @@
         {
           "type": 1,
           "content": {
-            "json": "## 🔁 Duplicates & Cleanup"
+            "json": "## Duplicates & Cleanup"
           },
           "name": "section-duplicates"
         },
@@ -560,7 +560,7 @@
         {
           "type": 1,
           "content": {
-            "json": "## ✅ Active Devices\nDevices seen in the last 7 days with an Active sensor health state."
+            "json": "## Active Devices\nDevices seen in the last 7 days with an Active sensor health state."
           },
           "name": "section-active"
         },
@@ -622,7 +622,7 @@
         {
           "type": 1,
           "content": {
-            "json": "## 📈 Active Fleet Health"
+            "json": "## Active Fleet Health"
           },
           "name": "section-fleet"
         },

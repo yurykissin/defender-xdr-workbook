@@ -39,7 +39,7 @@ If you have Microsoft Sentinel enabled, deploy this version to view the workbook
 | 👻 **Stale & Ghost Devices** | Bar chart of device staleness buckets (0-7d, 7-14d, 14-30d, 30-60d, 60-90d, 90d+) |
 | 📋 **Stale Device List** | Table of all devices past the stale threshold with color-coded days and health icons |
 | 🔴 **Unhealthy Devices** | Active VMs reporting non-Active sensor — likely blocked network traffic |
-| 🔌 **Onboarded But Never Healthy** | Devices onboarded via Terraform/script but agent never connected |
+| **Onboarded But Never Healthy** | Devices onboarded but agent never connected |
 | 🌐 **Network Connectivity** | Failed connections to MDE cloud endpoints (securitycenter.windows.com, winatp-gw, etc.) |
 | 📈 **Daily Failed Connection Trend** | Line chart of failed connections by MDE endpoint over 7 days |
 | 🔥 **Firewall/NSG Blocks** | Table of blocked connections to MDE service URLs with block counts |
