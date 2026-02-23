@@ -1,0 +1,252 @@
+// ============================================================================
+// Microsoft Defender XDR - Device Hygiene & Health Dashboards
+// ============================================================================
+// Paste each section into Advanced Hunting in the Defender XDR portal.
+// Queries target Azure VMs with manually onboarded MDE agents.
+// ============================================================================
+
+
+// ============================================================================
+// 1. OVERVIEW - Device Inventory Summary
+// ============================================================================
+// Shows total devices, active vs stale, healthy vs unhealthy at a glance.
+
+DeviceInfo
+| where Timestamp > ago(1d)
+| summarize arg_max(Timestamp, *) by DeviceId
+| summarize
+    TotalDevices = dcount(DeviceId),
+    ActiveLast24h = dcountif(DeviceId, Timestamp > ago(1d)),
+    ActiveLast7d = dcountif(DeviceId, Timestamp > ago(7d)),
+    StalOver30d = dcountif(DeviceId, Timestamp < ago(30d)),
+    Windows = dcountif(DeviceId, OSPlatform startswith "Windows"),
+    Linux = dcountif(DeviceId, OSPlatform startswith "Linux"),
+    Healthy = dcountif(DeviceId, SensorHealthState == "Active"),
+    Unhealthy = dcountif(DeviceId, SensorHealthState != "Active")
+
+
+// ============================================================================
+// 2. STALE DEVICES - Devices not seen in 14+ days (likely decommissioned VMs)
+// ============================================================================
+// These are your ghost devices from VMs that were spun down.
+// Use this list to bulk-offboard or delete from the portal.
+
+DeviceInfo
+| summarize LastSeen = arg_max(Timestamp, *) by DeviceId
+| where LastSeen < ago(14d)
+| project
+    DeviceId,
+    DeviceName,
+    OSPlatform,
+    OSVersionInfo,
+    LastSeen,
+    DaysSinceLastSeen = datetime_diff('day', now(), LastSeen),
+    SensorHealthState,
+    OnboardingStatus,
+    MachineGroup
+| sort by DaysSinceLastSeen desc
+
+
+// ============================================================================
+// 3. STALE DEVICES - Aging buckets breakdown
+// ============================================================================
+// Understand how stale devices are distributed across time buckets.
+
+DeviceInfo
+| summarize LastSeen = arg_max(Timestamp, *) by DeviceId
+| extend AgeBucket = case(
+    LastSeen > ago(7d), "0-7 days (Active)",
+    LastSeen > ago(14d), "7-14 days",
+    LastSeen > ago(30d), "14-30 days (Stale)",
+    LastSeen > ago(60d), "30-60 days (Very Stale)",
+    LastSeen > ago(90d), "60-90 days",
+    "90+ days (Ghost)")
+| summarize DeviceCount = dcount(DeviceId) by AgeBucket
+| sort by AgeBucket asc
+
+
+// ============================================================================
+// 4. UNHEALTHY DEVICES - Active VMs with sensor issues
+// ============================================================================
+// These are devices that checked in recently but have a non-Active sensor state.
+// Likely cause: network/firewall blocking MDE traffic to *.securitycenter.windows.com
+
+DeviceInfo
+| where Timestamp > ago(1d)
+| summarize arg_max(Timestamp, *) by DeviceId
+| where SensorHealthState != "Active"
+| project
+    DeviceId,
+    DeviceName,
+    OSPlatform,
+    OSVersionInfo,
+    SensorHealthState,
+    OnboardingStatus,
+    LastSeen = Timestamp,
+    MachineGroup,
+    PublicIP,
+    IsInternetFacing
+| sort by SensorHealthState asc, DeviceName asc
+
+
+// ============================================================================
+// 5. UNHEALTHY DEVICES - Sensor health state breakdown
+// ============================================================================
+
+DeviceInfo
+| where Timestamp > ago(1d)
+| summarize arg_max(Timestamp, *) by DeviceId
+| summarize DeviceCount = dcount(DeviceId) by SensorHealthState
+| sort by DeviceCount desc
+
+
+// ============================================================================
+// 6. NETWORK CONNECTIVITY - Devices failing to reach MDE cloud endpoints
+// ============================================================================
+// Checks for failed outbound connections to MDE service URLs.
+// This helps pinpoint which VMs have blocked traffic.
+
+DeviceNetworkEvents
+| where Timestamp > ago(7d)
+| where RemoteUrl has_any (
+    "securitycenter.windows.com",
+    "winatp-gw",
+    "events.data.microsoft.com",
+    "endpoint.security.microsoft.com",
+    "ussus1eastprod.blob.core.windows.net",
+    "ussus1westprod.blob.core.windows.net")
+| where ActionType in ("ConnectionFailed", "ConnectionAttempt")
+| summarize
+    FailedConnections = countif(ActionType == "ConnectionFailed"),
+    TotalAttempts = count()
+    by DeviceId, DeviceName, RemoteUrl, RemotePort
+| where FailedConnections > 0
+| sort by FailedConnections desc
+
+
+// ============================================================================
+// 7. NETWORK CONNECTIVITY - Firewall/NSG blocks to MDE endpoints
+// ============================================================================
+// If you have Windows Firewall logging or third-party FW data flowing in,
+// this catches explicit blocks to MDE service IPs/URLs.
+
+DeviceNetworkEvents
+| where Timestamp > ago(7d)
+| where ActionType == "ConnectionFailed"
+| where RemotePort in (443, 80)
+| where RemoteUrl has_any (
+    "securitycenter.windows.com",
+    "winatp-gw",
+    "events.data.microsoft.com",
+    "endpoint.security.microsoft.com")
+| summarize
+    BlockCount = count(),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp)
+    by DeviceId, DeviceName, RemoteUrl, RemotePort, LocalIP
+| sort by BlockCount desc
+
+
+// ============================================================================
+// 8. ONBOARDING STATUS - Devices that onboarded but never became healthy
+// ============================================================================
+// Catches VMs where Terraform ran the onboarding script but the agent
+// never successfully connected to the MDE cloud.
+
+DeviceInfo
+| summarize arg_max(Timestamp, *) by DeviceId
+| where OnboardingStatus == "Onboarded"
+| where SensorHealthState != "Active"
+| where Timestamp > ago(30d)
+| project
+    DeviceId,
+    DeviceName,
+    OSPlatform,
+    SensorHealthState,
+    OnboardingStatus,
+    LastSeen = Timestamp,
+    DaysSinceLastSeen = datetime_diff('day', now(), Timestamp),
+    PublicIP,
+    MachineGroup
+| sort by DaysSinceLastSeen desc
+
+
+// ============================================================================
+// 9. DUPLICATE DEVICES - Same hostname appearing multiple times
+// ============================================================================
+// When VMs are rebuilt with the same name, MDE creates new device records.
+// This finds duplicates so you can clean up old entries.
+
+DeviceInfo
+| summarize arg_max(Timestamp, *) by DeviceId
+| summarize
+    DeviceCount = dcount(DeviceId),
+    DeviceIds = make_set(DeviceId),
+    LatestSeen = max(Timestamp),
+    EarliestSeen = min(Timestamp),
+    HealthStates = make_set(SensorHealthState)
+    by DeviceName
+| where DeviceCount > 1
+| sort by DeviceCount desc
+
+
+// ============================================================================
+// 10. ACTIVE VMs CROSS-REFERENCE - Devices seen recently, grouped by health
+// ============================================================================
+// Your ~2K active VMs should appear here. Any missing from this list
+// may have failed onboarding entirely.
+
+DeviceInfo
+| where Timestamp > ago(1d)
+| summarize arg_max(Timestamp, *) by DeviceId
+| summarize
+    Count = dcount(DeviceId),
+    Devices = make_set(DeviceName, 10)
+    by SensorHealthState, OSPlatform, MachineGroup
+| sort by Count desc
+
+
+// ============================================================================
+// 11. CLEANUP CANDIDATES - Safe-to-remove stale device list
+// ============================================================================
+// Devices not seen in 30+ days AND not in Active state.
+// Export this to CSV and use the MDE API to offboard/remove them.
+
+DeviceInfo
+| summarize LastSeen = arg_max(Timestamp, *) by DeviceId
+| where LastSeen < ago(30d)
+| where SensorHealthState != "Active"
+| project
+    DeviceId,
+    DeviceName,
+    OSPlatform,
+    SensorHealthState,
+    OnboardingStatus,
+    LastSeen,
+    DaysSinceLastSeen = datetime_diff('day', now(), LastSeen),
+    MachineGroup
+| sort by DaysSinceLastSeen desc
+
+
+// ============================================================================
+// 12. AV SIGNATURE STALENESS - Devices with outdated definitions
+// ============================================================================
+// Unhealthy devices may also have stale AV signatures, increasing risk.
+
+DeviceTvmSoftwareInventory
+| where SoftwareName has "antimalware" or SoftwareName has "defender"
+| summarize arg_max(Timestamp, *) by DeviceId
+| join kind=inner (
+    DeviceInfo
+    | where Timestamp > ago(1d)
+    | summarize arg_max(Timestamp, *) by DeviceId
+    | project DeviceId, DeviceName, SensorHealthState
+) on DeviceId
+| project
+    DeviceId,
+    DeviceName,
+    SensorHealthState,
+    SoftwareName,
+    SoftwareVersion,
+    LastSeenTime = Timestamp
+| sort by SoftwareVersion asc
