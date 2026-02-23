@@ -371,6 +371,8 @@
               "runAfter": {
                 "Create_Active_HTML_Table": [ "Succeeded" ],
                 "Create_Inactive_HTML_Table": [ "Succeeded" ],
+                "Parse_Active_Devices": [ "Succeeded" ],
+                "Parse_Inactive_Devices": [ "Succeeded" ],
                 "Parse_Tagged_Devices": [ "Succeeded" ]
               }
             },
