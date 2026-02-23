@@ -41,7 +41,9 @@ Runs weekly, queries MDE Advanced Hunting for active devices (seen in last 7 day
 
 ## App Registration Setup
 
-The Logic App needs an Azure AD App Registration to authenticate against the Microsoft 365 Defender API. If you already have one from [xdrnotifications](https://github.com/yurykissin/xdrnotifications), you can reuse it — just add the extra permission in step 4.
+The Logic App needs an Azure AD App Registration to authenticate against the Microsoft 365 Defender API.
+
+> **💡 Already have an App Registration for [xdrnotifications](https://github.com/yurykissin/xdrnotifications)?** You can reuse the same one — just add the `Machine.ReadWrite.All` permission (step 9 below). No need for a second app.
 
 ### Create a new App Registration
 
