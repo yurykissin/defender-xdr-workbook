@@ -119,9 +119,6 @@
             "TagName": {
               "type": "String"
             },
-            "ApprovalEmail": {
-              "type": "String"
-            },
             "RecurrenceInterval": {
               "type": "Int"
             },
@@ -296,7 +293,7 @@
                 "body": {
                   "NotificationUrl": "@{listCallbackUrl()}",
                   "Message": {
-                    "To": "@parameters('ApprovalEmail')",
+                    "To": "[parameters('approvalEmail')]",
                     "Subject": "MDE Device Tagging Report — @{length(body('Parse_Active_Devices'))} active, @{length(body('Parse_Tagged_Devices'))} tagged — Approval Required",
                     "Body": "@{outputs('Build_Report')}",
                     "Importance": "Normal",
@@ -467,9 +464,6 @@
           },
           "TagName": {
             "value": "[variables('tagName')]"
-          },
-          "ApprovalEmail": {
-            "value": "[parameters('approvalEmail')]"
           },
           "RecurrenceInterval": {
             "value": "[parameters('recurrenceInterval')]"
