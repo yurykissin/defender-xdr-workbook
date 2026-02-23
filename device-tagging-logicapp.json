@@ -438,7 +438,7 @@
                         "Add_Tag": {
                           "type": "Http",
                           "inputs": {
-                            "uri": "https://api.security.microsoft.com/api/machines/@{items('Tag_Active_Untagged_Devices')?['DeviceId']}/tags",
+                            "uri": "https://api.securitycenter.microsoft.com/api/machines/@{items('Tag_Active_Untagged_Devices')?['DeviceId']}/tags",
                             "method": "POST",
                             "headers": {
                               "Content-Type": "application/json"
@@ -451,7 +451,7 @@
                               "type": "ActiveDirectoryOAuth",
                               "authority": "",
                               "tenant": "@{parameters('TenantID')}",
-                              "audience": "https://api.security.microsoft.com",
+                              "audience": "https://api.securitycenter.microsoft.com",
                               "clientId": "@{parameters('ClientID')}",
                               "secret": "@{parameters('Secret')}"
                             }
@@ -492,7 +492,7 @@
                         "Remove_Tag": {
                           "type": "Http",
                           "inputs": {
-                            "uri": "https://api.security.microsoft.com/api/machines/@{items('Untag_Inactive_Devices')?['DeviceId']}/tags",
+                            "uri": "https://api.securitycenter.microsoft.com/api/machines/@{items('Untag_Inactive_Devices')?['DeviceId']}/tags",
                             "method": "POST",
                             "headers": {
                               "Content-Type": "application/json"
@@ -505,7 +505,7 @@
                               "type": "ActiveDirectoryOAuth",
                               "authority": "",
                               "tenant": "@{parameters('TenantID')}",
-                              "audience": "https://api.security.microsoft.com",
+                              "audience": "https://api.securitycenter.microsoft.com",
                               "clientId": "@{parameters('ClientID')}",
                               "secret": "@{parameters('Secret')}"
                             }
