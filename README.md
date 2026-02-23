@@ -43,7 +43,7 @@ Runs weekly, queries MDE Advanced Hunting for active devices (seen in last 7 day
 
 The Logic App needs an Azure AD App Registration to authenticate against the Microsoft 365 Defender API.
 
-> **💡 Already have an App Registration for [xdrnotifications](https://github.com/yurykissin/xdrnotifications)?** You can reuse the same one — just add the `Microsoft Threat Protection → Application permissions → Machine.ReadWrite.All` permission (step 9 below). No need for a second app.
+> **💡 Already have an App Registration for [xdrnotifications](https://github.com/yurykissin/xdrnotifications)?** You can reuse the same one — just add `WindowsDefenderATP → Application permissions → Machine.ReadWrite.All` (step 9 below). No need for a second app.
 
 ### Create a new App Registration
 
@@ -60,12 +60,13 @@ The Logic App needs an Azure AD App Registration to authenticate against the Mic
 ### Configure API permissions
 
 7. Go to **API permissions** → **Add a permission** → **APIs my organization uses**
-8. Search for **Microsoft Threat Protection** and select it
-9. Choose **Application permissions** and check:
-   - `Microsoft Threat Protection → Application permissions → AdvancedHunting.Read.All` — query device information
-   - `Microsoft Threat Protection → Application permissions → Machine.ReadWrite.All` — add/remove device tags
-10. Click **Add permissions**
-11. Click **Grant admin consent for [your organization]** — requires Global Admin or Privileged Role Administrator
+8. Search for **Microsoft Threat Protection** → select it → **Application permissions** → check:
+   - `AdvancedHunting.Read.All` — query device information
+9. Click **Add a permission** again → **APIs my organization uses**
+10. Search for **WindowsDefenderATP** → select it → **Application permissions** → check:
+    - `Machine.ReadWrite.All` — add/remove device tags
+11. Click **Add permissions**
+12. Click **Grant admin consent for [your organization]** — requires Global Admin or Privileged Role Administrator
 
 ### Values needed for deployment
 
