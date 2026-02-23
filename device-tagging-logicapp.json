@@ -282,36 +282,7 @@
                 "Create_Tagged_Devices_Table": [ "Succeeded" ]
               }
             },
-            "Build_Approval_Link": {
-              "type": "Compose",
-              "inputs": "@listCallbackUrl()",
-              "runAfter": {
-                "Build_Report": [ "Succeeded" ]
-              }
-            },
-            "Send_Report_Email": {
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['office365']['connectionId']"
-                  }
-                },
-                "method": "post",
-                "body": {
-                  "To": "[parameters('approvalEmail')]",
-                  "Subject": "MDE Device Tagging Report — @{length(body('Parse_Active_Devices'))} active, @{length(body('Parse_Tagged_Devices'))} tagged",
-                  "Body": "<p>@{outputs('Build_Report')}</p><hr/><p><strong>⚠️ Action Required:</strong> Reply to this email with <strong>APPROVE</strong> to apply tag changes, or ignore to skip this cycle.</p>",
-                  "Importance": "Normal",
-                  "IsHtml": true
-                },
-                "path": "/v2/Mail"
-              },
-              "runAfter": {
-                "Build_Report": [ "Succeeded" ]
-              }
-            },
-            "Wait_For_Approval": {
+            "Send_Approval_Email": {
               "type": "ApiConnectionWebhook",
               "inputs": {
                 "host": {
@@ -323,8 +294,8 @@
                   "NotificationUrl": "@{listCallbackUrl()}",
                   "Message": {
                     "To": "[parameters('approvalEmail')]",
-                    "Subject": "ACTION: Approve MDE Device Tagging? (@{length(body('Parse_Active_Devices'))} active devices)",
-                    "Body": "The device tagging report has been sent to your inbox.\n\nActive devices: @{length(body('Parse_Active_Devices'))}\nCurrently tagged: @{length(body('Parse_Tagged_Devices'))}\n\nApprove to add/remove ActiveDevice tags, or Reject to skip.",
+                    "Subject": "MDE Device Tagging Report — @{length(body('Parse_Active_Devices'))} active, @{length(body('Parse_Tagged_Devices'))} tagged",
+                    "Body": "@{outputs('Build_Report')}",
                     "Importance": "High",
                     "Options": "Approve, Reject"
                   }
@@ -332,7 +303,10 @@
                 "path": "/approvalmail/$subscriptions"
               },
               "runAfter": {
-                "Send_Report_Email": [ "Succeeded" ]
+                "Build_Report": [ "Succeeded" ]
+              },
+              "limit": {
+                "timeout": "P3D"
               }
             },
             "Check_Approval": {
@@ -341,7 +315,7 @@
                 "and": [
                   {
                     "equals": [
-                      "@body('Wait_For_Approval')?['SelectedOption']",
+                      "@body('Send_Approval_Email')?['SelectedOption']",
                       "Approve"
                     ]
                   }
@@ -461,7 +435,7 @@
                 "actions": {}
               },
               "runAfter": {
-                "Wait_For_Approval": [ "Succeeded" ],
+                "Send_Approval_Email": [ "Succeeded" ],
                 "Build_Active_Device_IDs": [ "Succeeded" ],
                 "Build_Tagged_Device_IDs": [ "Succeeded" ]
               }
