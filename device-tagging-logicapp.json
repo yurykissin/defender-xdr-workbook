@@ -129,7 +129,7 @@
                   "Content-Type": "application/json"
                 },
                 "body": {
-                  "Query": "DeviceInfo | where Timestamp > ago(@{parameters('ActiveThresholdDays')}d) | summarize arg_max(Timestamp, *) by DeviceId | where SensorHealthState == 'Active' | project DeviceId"
+                  "Query": "DeviceInfo | where Timestamp > ago(@{parameters('ActiveThresholdDays')}d) | summarize arg_max(Timestamp, *) by DeviceId | where SensorHealthState == 'Active' | project DeviceId, DeviceName, OSPlatform, LastSeen = Timestamp"
                 },
                 "authentication": {
                   "type": "ActiveDirectoryOAuth",
@@ -151,7 +151,7 @@
                   "Content-Type": "application/json"
                 },
                 "body": {
-                  "Query": "DeviceInfo | where Timestamp > ago(90d) | summarize arg_max(Timestamp, *) by DeviceId | where DeviceManualTags has '@{parameters('TagName')}' | project DeviceId"
+                  "Query": "DeviceInfo | where Timestamp > ago(90d) | summarize arg_max(Timestamp, *) by DeviceId | where DeviceManualTags has '@{parameters('TagName')}' | project DeviceId, DeviceName, OSPlatform, LastSeen = Timestamp"
                 },
                 "authentication": {
                   "type": "ActiveDirectoryOAuth",
@@ -173,9 +173,10 @@
                   "items": {
                     "type": "object",
                     "properties": {
-                      "DeviceId": {
-                        "type": "string"
-                      }
+                      "DeviceId": { "type": "string" },
+                      "DeviceName": { "type": "string" },
+                      "OSPlatform": { "type": "string" },
+                      "LastSeen": { "type": "string" }
                     }
                   }
                 }
@@ -195,9 +196,10 @@
                   "items": {
                     "type": "object",
                     "properties": {
-                      "DeviceId": {
-                        "type": "string"
-                      }
+                      "DeviceId": { "type": "string" },
+                      "DeviceName": { "type": "string" },
+                      "OSPlatform": { "type": "string" },
+                      "LastSeen": { "type": "string" }
                     }
                   }
                 }
@@ -228,6 +230,54 @@
               },
               "runAfter": {
                 "Parse_Tagged_Devices": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Create_Active_Devices_Table": {
+              "type": "Table",
+              "inputs": {
+                "from": "@body('Parse_Active_Devices')",
+                "format": "HTML",
+                "columns": [
+                  { "header": "Device Name", "value": "@item()?['DeviceName']" },
+                  { "header": "OS", "value": "@item()?['OSPlatform']" },
+                  { "header": "Last Seen", "value": "@item()?['LastSeen']" },
+                  { "header": "Device ID", "value": "@item()?['DeviceId']" }
+                ]
+              },
+              "runAfter": {
+                "Parse_Active_Devices": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Create_Tagged_Devices_Table": {
+              "type": "Table",
+              "inputs": {
+                "from": "@body('Parse_Tagged_Devices')",
+                "format": "HTML",
+                "columns": [
+                  { "header": "Device Name", "value": "@item()?['DeviceName']" },
+                  { "header": "OS", "value": "@item()?['OSPlatform']" },
+                  { "header": "Last Seen", "value": "@item()?['LastSeen']" },
+                  { "header": "Device ID", "value": "@item()?['DeviceId']" }
+                ]
+              },
+              "runAfter": {
+                "Parse_Tagged_Devices": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Summary_Report": {
+              "type": "Compose",
+              "inputs": "<h2>MDE Device Tagging Report</h2><p><strong>Mode:</strong> @{if(parameters('DryRun'), '🔍 DRY RUN (no changes made)', '✅ LIVE (tags applied)')}</p><p><strong>Active threshold:</strong> @{parameters('ActiveThresholdDays')} days</p><p><strong>Tag name:</strong> @{parameters('TagName')}</p><hr/><h3>✅ Active Devices (@{length(body('Parse_Active_Devices'))})</h3>@{body('Create_Active_Devices_Table')}<hr/><h3>🏷️ Currently Tagged Devices (@{length(body('Parse_Tagged_Devices'))})</h3>@{body('Create_Tagged_Devices_Table')}",
+              "runAfter": {
+                "Create_Active_Devices_Table": [
+                  "Succeeded"
+                ],
+                "Create_Tagged_Devices_Table": [
                   "Succeeded"
                 ]
               }
