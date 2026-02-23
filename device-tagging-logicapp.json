@@ -292,16 +292,16 @@
                 },
                 "body": {
                   "NotificationUrl": "@{listCallbackUrl()}",
-                  "Message": {
-                    "To": "[parameters('approvalEmail')]",
-                    "Subject": "MDE Device Tagging Report — @{length(body('Parse_Active_Devices'))} active, @{length(body('Parse_Tagged_Devices'))} tagged — Approval Required",
-                    "Body": "@{outputs('Build_Report')}",
-                    "Importance": "Normal",
-                    "Options": "Approve, Reject",
-                    "IsAlert": true
-                  }
+                  "To": "[parameters('approvalEmail')]",
+                  "Subject": "MDE Device Tagging Report — @{length(body('Parse_Active_Devices'))} active, @{length(body('Parse_Tagged_Devices'))} tagged",
+                  "Options": "Approve, Reject",
+                  "Body": "@{outputs('Build_Report')}",
+                  "HeaderText": "MDE Device Tagging — Approval Required",
+                  "SelectionText": "Review the report above and select an option",
+                  "Importance": "Normal",
+                  "UseOnlyHTMLMessage": true
                 },
-                "path": "/approvalmail/$subscriptions"
+                "path": "/mailwithoptions/$subscriptions"
               },
               "runAfter": {
                 "Build_Report": [ "Succeeded" ]
