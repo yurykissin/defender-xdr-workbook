@@ -35,10 +35,10 @@
         "description": "App Registration Client Secret"
       }
     },
-    "approvalEmail": {
+    "reportEmail": {
       "type": "string",
       "metadata": {
-        "description": "Email address to receive the tagging report and approval request"
+        "description": "Email address to receive the device tagging report"
       }
     },
     "recurrenceInterval": {
@@ -66,6 +66,13 @@
       "defaultValue": 7,
       "metadata": {
         "description": "Devices seen within this many days are considered active"
+      }
+    },
+    "dryRun": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "When true (default), sends report only. Set to false to also apply tag changes."
       }
     }
   },
@@ -119,6 +126,9 @@
             "TagName": {
               "type": "String"
             },
+            "DryRun": {
+              "type": "Bool"
+            },
             "RecurrenceInterval": {
               "type": "Int"
             },
@@ -146,6 +156,28 @@
                 },
                 "body": {
                   "Query": "DeviceInfo | where Timestamp > ago(@{parameters('ActiveThresholdDays')}d) | summarize arg_max(Timestamp, *) by DeviceId | where SensorHealthState == 'Active' | project DeviceId, DeviceName, OSPlatform, LastSeen = Timestamp"
+                },
+                "authentication": {
+                  "type": "ActiveDirectoryOAuth",
+                  "authority": "",
+                  "tenant": "@{parameters('TenantID')}",
+                  "audience": "https://api.security.microsoft.com",
+                  "clientId": "@{parameters('ClientID')}",
+                  "secret": "@{parameters('Secret')}"
+                }
+              },
+              "runAfter": {}
+            },
+            "Query_Inactive_Devices": {
+              "type": "Http",
+              "inputs": {
+                "uri": "https://api.security.microsoft.com/api/advancedhunting/run",
+                "method": "POST",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "Query": "DeviceInfo | where Timestamp > ago(90d) | summarize arg_max(Timestamp, *) by DeviceId | where Timestamp < ago(@{parameters('ActiveThresholdDays')}d) or SensorHealthState != 'Active' | project DeviceId, DeviceName, OSPlatform, SensorHealthState, LastSeen = Timestamp, DaysSinceLastSeen = datetime_diff('day', now(), Timestamp) | sort by DaysSinceLastSeen desc"
                 },
                 "authentication": {
                   "type": "ActiveDirectoryOAuth",
@@ -201,6 +233,29 @@
                 "Query_Active_Devices": [ "Succeeded" ]
               }
             },
+            "Parse_Inactive_Devices": {
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@body('Query_Inactive_Devices')?['Results']",
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "DeviceId": { "type": "string" },
+                      "DeviceName": { "type": "string" },
+                      "OSPlatform": { "type": "string" },
+                      "SensorHealthState": { "type": "string" },
+                      "LastSeen": { "type": "string" },
+                      "DaysSinceLastSeen": { "type": "integer" }
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Query_Inactive_Devices": [ "Succeeded" ]
+              }
+            },
             "Parse_Tagged_Devices": {
               "type": "ParseJson",
               "inputs": {
@@ -242,7 +297,7 @@
                 "Parse_Tagged_Devices": [ "Succeeded" ]
               }
             },
-            "Create_Active_Devices_Table": {
+            "Create_Active_HTML_Table": {
               "type": "Table",
               "inputs": {
                 "from": "@body('Parse_Active_Devices')",
@@ -258,65 +313,110 @@
                 "Parse_Active_Devices": [ "Succeeded" ]
               }
             },
-            "Create_Tagged_Devices_Table": {
+            "Create_Inactive_HTML_Table": {
               "type": "Table",
               "inputs": {
-                "from": "@body('Parse_Tagged_Devices')",
+                "from": "@body('Parse_Inactive_Devices')",
                 "format": "HTML",
                 "columns": [
                   { "header": "Device Name", "value": "@item()?['DeviceName']" },
                   { "header": "OS", "value": "@item()?['OSPlatform']" },
+                  { "header": "Sensor Health", "value": "@item()?['SensorHealthState']" },
                   { "header": "Last Seen", "value": "@item()?['LastSeen']" },
+                  { "header": "Days Inactive", "value": "@item()?['DaysSinceLastSeen']" },
                   { "header": "Device ID", "value": "@item()?['DeviceId']" }
                 ]
               },
               "runAfter": {
-                "Parse_Tagged_Devices": [ "Succeeded" ]
+                "Parse_Inactive_Devices": [ "Succeeded" ]
+              }
+            },
+            "Create_Active_CSV": {
+              "type": "Table",
+              "inputs": {
+                "from": "@body('Parse_Active_Devices')",
+                "format": "CSV",
+                "columns": [
+                  { "header": "DeviceName", "value": "@item()?['DeviceName']" },
+                  { "header": "OSPlatform", "value": "@item()?['OSPlatform']" },
+                  { "header": "LastSeen", "value": "@item()?['LastSeen']" },
+                  { "header": "DeviceId", "value": "@item()?['DeviceId']" }
+                ]
+              },
+              "runAfter": {
+                "Parse_Active_Devices": [ "Succeeded" ]
+              }
+            },
+            "Create_Inactive_CSV": {
+              "type": "Table",
+              "inputs": {
+                "from": "@body('Parse_Inactive_Devices')",
+                "format": "CSV",
+                "columns": [
+                  { "header": "DeviceName", "value": "@item()?['DeviceName']" },
+                  { "header": "OSPlatform", "value": "@item()?['OSPlatform']" },
+                  { "header": "SensorHealthState", "value": "@item()?['SensorHealthState']" },
+                  { "header": "LastSeen", "value": "@item()?['LastSeen']" },
+                  { "header": "DaysSinceLastSeen", "value": "@item()?['DaysSinceLastSeen']" },
+                  { "header": "DeviceId", "value": "@item()?['DeviceId']" }
+                ]
+              },
+              "runAfter": {
+                "Parse_Inactive_Devices": [ "Succeeded" ]
               }
             },
             "Build_Report": {
               "type": "Compose",
-              "inputs": "<html><head><style>body{font-family:Segoe UI,sans-serif;margin:20px}table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background-color:#0078d4;color:white}tr:nth-child(even){background-color:#f2f2f2}.summary{background:#f0f8ff;padding:15px;border-radius:8px;margin:10px 0}.badge{display:inline-block;padding:4px 12px;border-radius:12px;color:white;font-weight:bold}.green{background:#107c10}.red{background:#d13438}.blue{background:#0078d4}</style></head><body><h1>🛡️ MDE Device Tagging Report</h1><div class='summary'><p><strong>Tag name:</strong> <span class='badge blue'>@{parameters('TagName')}</span></p><p><strong>Active threshold:</strong> @{parameters('ActiveThresholdDays')} days</p><p><strong>Active devices:</strong> <span class='badge green'>@{length(body('Parse_Active_Devices'))}</span></p><p><strong>Currently tagged:</strong> <span class='badge blue'>@{length(body('Parse_Tagged_Devices'))}</span></p></div><h2>⚠️ Devices to be UNTAGGED (no longer active)</h2><p>These devices have the <strong>@{parameters('TagName')}</strong> tag but have NOT been seen in the last @{parameters('ActiveThresholdDays')} days. Approving will <strong>remove</strong> the tag from these devices.</p>@{body('Create_Tagged_Devices_Table')}<hr/><h2>✅ Active Devices (will be tagged)</h2><p>These devices are active and healthy. Approving will <strong>add</strong> the tag to any that don't already have it.</p>@{body('Create_Active_Devices_Table')}<hr/><p><em>Click <strong>Approve</strong> to apply tag changes, or <strong>Reject</strong> to skip this cycle.</em></p></body></html>",
+              "inputs": "<html><head><style>body{font-family:Segoe UI,sans-serif;margin:20px}table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background-color:#0078d4;color:white}tr:nth-child(even){background-color:#f2f2f2}.summary{background:#f0f8ff;padding:15px;border-radius:8px;margin:10px 0}.badge{display:inline-block;padding:4px 12px;border-radius:12px;color:white;font-weight:bold}.green{background:#107c10}.red{background:#d13438}.blue{background:#0078d4}.orange{background:#ff8c00}</style></head><body><h1>🛡️ MDE Device Tagging Report</h1><div class='summary'><p><strong>Mode:</strong> @{if(parameters('DryRun'), '<span class=\"badge orange\">🔍 DRY RUN — report only, no changes</span>', '<span class=\"badge green\">✅ LIVE — tags applied</span>')}</p><p><strong>Tag name:</strong> <span class='badge blue'>@{parameters('TagName')}</span></p><p><strong>Active threshold:</strong> @{parameters('ActiveThresholdDays')} days</p><p><strong>Active devices:</strong> <span class='badge green'>@{length(body('Parse_Active_Devices'))}</span></p><p><strong>Inactive devices:</strong> <span class='badge red'>@{length(body('Parse_Inactive_Devices'))}</span></p><p><strong>Currently tagged:</strong> <span class='badge blue'>@{length(body('Parse_Tagged_Devices'))}</span></p></div><h2>🔴 Inactive / Unhealthy Devices (@{length(body('Parse_Inactive_Devices'))})</h2><p>Devices not seen in the last @{parameters('ActiveThresholdDays')} days or with non-Active sensor health.</p>@{body('Create_Inactive_HTML_Table')}<hr/><h2>✅ Active Devices (@{length(body('Parse_Active_Devices'))})</h2>@{body('Create_Active_HTML_Table')}<hr/><p><em>CSV files are attached to this email for further analysis.</em></p></body></html>",
               "runAfter": {
-                "Create_Active_Devices_Table": [ "Succeeded" ],
-                "Create_Tagged_Devices_Table": [ "Succeeded" ]
+                "Create_Active_HTML_Table": [ "Succeeded" ],
+                "Create_Inactive_HTML_Table": [ "Succeeded" ]
               }
             },
-            "Send_Approval_Email": {
-              "type": "ApiConnectionWebhook",
+            "Send_Report_Email": {
+              "type": "ApiConnection",
               "inputs": {
                 "host": {
                   "connection": {
                     "name": "@parameters('$connections')['office365']['connectionId']"
                   }
                 },
+                "method": "post",
                 "body": {
-                  "NotificationUrl": "@{listCallbackUrl()}",
-                  "Message": {
-                    "To": "[parameters('approvalEmail')]",
-                    "Subject": "MDE Device Tagging Report — @{length(body('Parse_Active_Devices'))} active, @{length(body('Parse_Tagged_Devices'))} tagged",
-                    "Body": "@{outputs('Build_Report')}",
-                    "Importance": "High",
-                    "Options": "Approve, Reject"
-                  }
+                  "To": "[parameters('reportEmail')]",
+                  "Subject": "MDE Device Report — @{length(body('Parse_Active_Devices'))} active, @{length(body('Parse_Inactive_Devices'))} inactive @{if(parameters('DryRun'), '[DRY RUN]', '[LIVE]')}",
+                  "Body": "<p>@{outputs('Build_Report')}</p>",
+                  "Importance": "Normal",
+                  "IsHtml": true,
+                  "Attachments": [
+                    {
+                      "Name": "active-devices.csv",
+                      "ContentBytes": "@{base64(body('Create_Active_CSV'))}",
+                      "ContentType": "text/csv"
+                    },
+                    {
+                      "Name": "inactive-devices.csv",
+                      "ContentBytes": "@{base64(body('Create_Inactive_CSV'))}",
+                      "ContentType": "text/csv"
+                    }
+                  ]
                 },
-                "path": "/approvalmail/$subscriptions"
+                "path": "/v2/Mail"
               },
               "runAfter": {
-                "Build_Report": [ "Succeeded" ]
-              },
-              "limit": {
-                "timeout": "P3D"
+                "Build_Report": [ "Succeeded" ],
+                "Create_Active_CSV": [ "Succeeded" ],
+                "Create_Inactive_CSV": [ "Succeeded" ]
               }
             },
-            "Check_Approval": {
+            "Apply_Tags_If_Live": {
               "type": "If",
               "expression": {
                 "and": [
                   {
                     "equals": [
-                      "@body('Send_Approval_Email')?['SelectedOption']",
-                      "Approve"
+                      "@parameters('DryRun')",
+                      false
                     ]
                   }
                 ]
@@ -435,7 +535,7 @@
                 "actions": {}
               },
               "runAfter": {
-                "Send_Approval_Email": [ "Succeeded" ],
+                "Send_Report_Email": [ "Succeeded" ],
                 "Build_Active_Device_IDs": [ "Succeeded" ],
                 "Build_Tagged_Device_IDs": [ "Succeeded" ]
               }
@@ -467,6 +567,9 @@
           "TagName": {
             "value": "[variables('tagName')]"
           },
+          "DryRun": {
+            "value": "[parameters('dryRun')]"
+          },
           "RecurrenceInterval": {
             "value": "[parameters('recurrenceInterval')]"
           },
@@ -484,7 +587,7 @@
     },
     "postDeploymentNote": {
       "type": "string",
-      "value": "IMPORTANT: After deployment, go to the Logic App → API connections → authorize the Office 365 Outlook connection with your account."
+      "value": "IMPORTANT: After deployment, go to the API connection resource → Edit API connection → Authorize with your Office 365 account → Save."
     }
   }
 }

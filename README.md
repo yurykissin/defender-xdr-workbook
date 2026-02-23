@@ -29,13 +29,12 @@ Azure Monitor Workbook that provides a comprehensive dashboard for monitoring Mi
 
 [![Deploy Logic App](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fyurykissin%2Fdefender-xdr-workbook%2Fmain%2Fdevice-tagging-logicapp.json)
 
-Runs weekly, queries MDE Advanced Hunting for active devices (seen in last 7 days), and manages the `ActiveDevice` tag via email approval:
-1. Queries active devices and currently tagged devices
-2. Sends a **styled HTML report** to your email with device tables and summary
-3. You review the report and click **Approve** or **Reject**
-4. If approved — adds the tag to newly active devices, removes it from inactive ones
+Runs weekly, queries MDE Advanced Hunting for device status, and emails a styled report with CSV attachments:
+- **Active devices** — healthy sensors seen in the last 7 days
+- **Inactive devices** — stale or unhealthy sensors, sorted by days since last seen
+- **CSV attachments** — `active-devices.csv` and `inactive-devices.csv` for further analysis
 
-> **⚠️ Post-deployment:** You must authorize the Office 365 Outlook API connection before the Logic App can send emails. See [Post-Deployment Steps](#logic-app) below.
+> **Deploys in dry-run mode (default).** The Logic App sends the report email but does **not** modify any tags. To enable tagging, redeploy with `dryRun` set to `false`, or change the `DryRun` parameter to `false` in the Logic App parameters and trigger a manual run.
 
 ## Prerequisites
 
@@ -94,10 +93,9 @@ The Logic App needs an Azure AD App Registration to authenticate against the Mic
 1. Go to the Azure Portal → your Resource Group
 2. Find the **API Connection** resource (named `<logicAppName>-office365`)
 3. Click **Edit API connection** → click **Authorize** → sign in with your Office 365 account → **Save**
-4. Open the **Logic App** resource
-5. The Logic App runs automatically on the configured schedule (default: weekly)
-6. You'll receive an approval email with a device report — click **Approve** to apply tag changes
-7. Monitor runs in the Logic App's **Run history**
+4. Open the **Logic App** resource → it runs automatically on schedule (default: weekly)
+5. You'll receive a device report email with HTML tables and CSV attachments
+6. To enable actual tagging, change the `DryRun` parameter to `false` in the Logic App and trigger a run
 
 ## Files
 
