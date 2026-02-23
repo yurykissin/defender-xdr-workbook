@@ -414,16 +414,7 @@
             },
             "Apply_Tags_If_Live": {
               "type": "If",
-              "expression": {
-                "and": [
-                  {
-                    "equals": [
-                      "@parameters('DryRun')",
-                      false
-                    ]
-                  }
-                ]
-              },
+              "expression": "@equals(parameters('DryRun'), false)",
               "actions": {
                 "Tag_Active_Untagged_Devices": {
                   "type": "Foreach",
