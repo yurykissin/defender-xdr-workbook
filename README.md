@@ -37,10 +37,41 @@ Runs weekly, queries MDE Advanced Hunting for active devices (seen in last 7 day
 
 1. **Log Analytics Workspace** connected to Microsoft Defender for Endpoint
 2. An Azure subscription with permissions to create Workbooks and Logic Apps
-3. **App Registration** (for the Logic App) with:
-   - `AdvancedHunting.Read.All` — to query device information
-   - `Machine.ReadWrite.All` — to add/remove device tags
-   - Admin consent granted for both permissions
+3. **App Registration** in Azure AD (required for the Logic App) — see setup below
+
+## App Registration Setup
+
+The Logic App needs an Azure AD App Registration to authenticate against the Microsoft 365 Defender API. If you already have one from [xdrnotifications](https://github.com/yurykissin/xdrnotifications), you can reuse it — just add the extra permission in step 4.
+
+### Create a new App Registration
+
+1. Go to **Azure Portal** → **Microsoft Entra ID** → **App registrations** → **New registration**
+2. Name it (e.g., `MDE-DeviceTagger`) → click **Register**
+3. On the **Overview** page, copy the **Application (client) ID** — you'll need it during deployment
+
+### Add a client secret
+
+4. Go to **Certificates & secrets** → **New client secret**
+5. Set a description and expiry → click **Add**
+6. **Copy the Secret Value immediately** — it won't be shown again
+
+### Configure API permissions
+
+7. Go to **API permissions** → **Add a permission** → **APIs my organization uses**
+8. Search for **Microsoft Threat Protection** and select it
+9. Choose **Application permissions** and check:
+   - `AdvancedHunting.Read.All` — query device information
+   - `Machine.ReadWrite.All` — add/remove device tags
+10. Click **Add permissions**
+11. Click **Grant admin consent for [your organization]** — requires Global Admin or Privileged Role Administrator
+
+### Values needed for deployment
+
+| Value | Where to find it |
+|-------|-----------------|
+| **Client ID** | App registration → Overview → Application (client) ID |
+| **Client Secret** | The value you copied in step 6 |
+| **Tenant ID** | App registration → Overview → Directory (tenant) ID (auto-filled by default) |
 
 ## Post-Deployment Steps
 
