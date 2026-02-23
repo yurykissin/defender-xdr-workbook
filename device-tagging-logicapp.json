@@ -35,6 +35,12 @@
         "description": "App Registration Client Secret"
       }
     },
+    "approvalEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Email address to receive the tagging report and approval request"
+      }
+    },
     "recurrenceInterval": {
       "type": "int",
       "defaultValue": 1,
@@ -61,30 +67,43 @@
       "metadata": {
         "description": "Devices seen within this many days are considered active"
       }
-    },
-    "dryRun": {
-      "type": "bool",
-      "defaultValue": true,
-      "metadata": {
-        "description": "When true (default), the Logic App only queries and logs — no tags are added or removed. Set to false to enable tagging."
-      }
     }
   },
   "variables": {
-    "tagName": "ActiveDevice"
+    "tagName": "ActiveDevice",
+    "o365ConnectionName": "[concat(parameters('logicAppName'), '-office365')]"
   },
   "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('o365ConnectionName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "api": {
+          "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'office365')]"
+        },
+        "displayName": "Office 365 Outlook - MDE Tagger"
+      }
+    },
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2019-05-01",
       "name": "[parameters('logicAppName')]",
       "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]"
+      ],
       "properties": {
         "state": "Enabled",
         "definition": {
           "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
           "contentVersion": "1.0.0.0",
           "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
             "TenantID": {
               "type": "String"
             },
@@ -100,14 +119,14 @@
             "TagName": {
               "type": "String"
             },
+            "ApprovalEmail": {
+              "type": "String"
+            },
             "RecurrenceInterval": {
               "type": "Int"
             },
             "RecurrenceFrequency": {
               "type": "String"
-            },
-            "DryRun": {
-              "type": "Bool"
             }
           },
           "triggers": {
@@ -182,9 +201,7 @@
                 }
               },
               "runAfter": {
-                "Query_Active_Devices": [
-                  "Succeeded"
-                ]
+                "Query_Active_Devices": [ "Succeeded" ]
               }
             },
             "Parse_Tagged_Devices": {
@@ -205,9 +222,7 @@
                 }
               },
               "runAfter": {
-                "Query_Currently_Tagged_Devices": [
-                  "Succeeded"
-                ]
+                "Query_Currently_Tagged_Devices": [ "Succeeded" ]
               }
             },
             "Build_Active_Device_IDs": {
@@ -217,9 +232,7 @@
                 "select": "@item()?['DeviceId']"
               },
               "runAfter": {
-                "Parse_Active_Devices": [
-                  "Succeeded"
-                ]
+                "Parse_Active_Devices": [ "Succeeded" ]
               }
             },
             "Build_Tagged_Device_IDs": {
@@ -229,9 +242,7 @@
                 "select": "@item()?['DeviceId']"
               },
               "runAfter": {
-                "Parse_Tagged_Devices": [
-                  "Succeeded"
-                ]
+                "Parse_Tagged_Devices": [ "Succeeded" ]
               }
             },
             "Create_Active_Devices_Table": {
@@ -247,9 +258,7 @@
                 ]
               },
               "runAfter": {
-                "Parse_Active_Devices": [
-                  "Succeeded"
-                ]
+                "Parse_Active_Devices": [ "Succeeded" ]
               }
             },
             "Create_Tagged_Devices_Table": {
@@ -265,56 +274,75 @@
                 ]
               },
               "runAfter": {
-                "Parse_Tagged_Devices": [
-                  "Succeeded"
-                ]
+                "Parse_Tagged_Devices": [ "Succeeded" ]
               }
             },
-            "Summary_Report": {
+            "Build_Report": {
               "type": "Compose",
-              "inputs": "<h2>MDE Device Tagging Report</h2><p><strong>Mode:</strong> @{if(parameters('DryRun'), '🔍 DRY RUN (no changes made)', '✅ LIVE (tags applied)')}</p><p><strong>Active threshold:</strong> @{parameters('ActiveThresholdDays')} days</p><p><strong>Tag name:</strong> @{parameters('TagName')}</p><hr/><h3>✅ Active Devices (@{length(body('Parse_Active_Devices'))})</h3>@{body('Create_Active_Devices_Table')}<hr/><h3>🏷️ Currently Tagged Devices (@{length(body('Parse_Tagged_Devices'))})</h3>@{body('Create_Tagged_Devices_Table')}",
+              "inputs": "<html><head><style>body{font-family:Segoe UI,sans-serif;margin:20px}table{border-collapse:collapse;width:100%;margin:10px 0}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background-color:#0078d4;color:white}tr:nth-child(even){background-color:#f2f2f2}.summary{background:#f0f8ff;padding:15px;border-radius:8px;margin:10px 0}.badge{display:inline-block;padding:4px 12px;border-radius:12px;color:white;font-weight:bold}.green{background:#107c10}.red{background:#d13438}.blue{background:#0078d4}</style></head><body><h1>🛡️ MDE Device Tagging Report</h1><div class='summary'><p><strong>Tag name:</strong> <span class='badge blue'>@{parameters('TagName')}</span></p><p><strong>Active threshold:</strong> @{parameters('ActiveThresholdDays')} days</p><p><strong>Active devices:</strong> <span class='badge green'>@{length(body('Parse_Active_Devices'))}</span></p><p><strong>Currently tagged:</strong> <span class='badge blue'>@{length(body('Parse_Tagged_Devices'))}</span></p></div><h2>⚠️ Devices to be UNTAGGED (no longer active)</h2><p>These devices have the <strong>@{parameters('TagName')}</strong> tag but have NOT been seen in the last @{parameters('ActiveThresholdDays')} days. Approving will <strong>remove</strong> the tag from these devices.</p>@{body('Create_Tagged_Devices_Table')}<hr/><h2>✅ Active Devices (will be tagged)</h2><p>These devices are active and healthy. Approving will <strong>add</strong> the tag to any that don't already have it.</p>@{body('Create_Active_Devices_Table')}<hr/><p><em>Click <strong>Approve</strong> to apply tag changes, or <strong>Reject</strong> to skip this cycle.</em></p></body></html>",
               "runAfter": {
-                "Create_Active_Devices_Table": [
-                  "Succeeded"
-                ],
-                "Create_Tagged_Devices_Table": [
-                  "Succeeded"
-                ]
+                "Create_Active_Devices_Table": [ "Succeeded" ],
+                "Create_Tagged_Devices_Table": [ "Succeeded" ]
               }
             },
-            "Tag_Active_Untagged_Devices": {
-              "type": "Foreach",
-              "foreach": "@body('Parse_Active_Devices')",
-              "actions": {
-                "Check_If_Already_Tagged": {
-                  "type": "If",
-                  "expression": {
-                    "and": [
-                      {
-                        "not": {
-                          "contains": [
-                            "@body('Build_Tagged_Device_IDs')",
-                            "@items('Tag_Active_Untagged_Devices')?['DeviceId']"
-                          ]
-                        }
-                      }
+            "Send_Approval_Email": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['office365']['connectionId']"
+                  }
+                },
+                "body": {
+                  "NotificationUrl": "@{listCallbackUrl()}",
+                  "Message": {
+                    "To": "@{parameters('ApprovalEmail')}",
+                    "Subject": "MDE Device Tagging Report — @{length(body('Parse_Active_Devices'))} active, @{length(body('Parse_Tagged_Devices'))} tagged — Approval Required",
+                    "Body": "@{outputs('Build_Report')}",
+                    "Importance": "Normal",
+                    "Options": "Approve, Reject",
+                    "IsAlert": true
+                  }
+                },
+                "path": "/approvalmail/$subscriptions"
+              },
+              "runAfter": {
+                "Build_Report": [ "Succeeded" ]
+              }
+            },
+            "Check_Approval": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@body('Send_Approval_Email')?['SelectedOption']",
+                      "Approve"
                     ]
-                  },
+                  }
+                ]
+              },
+              "actions": {
+                "Tag_Active_Untagged_Devices": {
+                  "type": "Foreach",
+                  "foreach": "@body('Parse_Active_Devices')",
                   "actions": {
-                    "Add_Tag": {
+                    "Check_If_Already_Tagged": {
                       "type": "If",
                       "expression": {
                         "and": [
                           {
-                            "equals": [
-                              "@parameters('DryRun')",
-                              false
-                            ]
+                            "not": {
+                              "contains": [
+                                "@body('Build_Tagged_Device_IDs')",
+                                "@items('Tag_Active_Untagged_Devices')?['DeviceId']"
+                              ]
+                            }
                           }
                         ]
                       },
                       "actions": {
-                        "Add_Tag_HTTP": {
+                        "Add_Tag": {
                           "type": "Http",
                           "inputs": {
                             "uri": "https://api.security.microsoft.com/api/machines/@{items('Tag_Active_Untagged_Devices')?['DeviceId']}/tags",
@@ -342,58 +370,33 @@
                       }
                     }
                   },
-                  "else": {
-                    "actions": {}
+                  "runAfter": {},
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 5
+                    }
                   }
-                }
-              },
-              "runAfter": {
-                "Build_Active_Device_IDs": [
-                  "Succeeded"
-                ],
-                "Build_Tagged_Device_IDs": [
-                  "Succeeded"
-                ]
-              },
-              "runtimeConfiguration": {
-                "concurrency": {
-                  "repetitions": 5
-                }
-              }
-            },
-            "Untag_Inactive_Devices": {
-              "type": "Foreach",
-              "foreach": "@body('Parse_Tagged_Devices')",
-              "actions": {
-                "Check_If_Still_Active": {
-                  "type": "If",
-                  "expression": {
-                    "and": [
-                      {
-                        "not": {
-                          "contains": [
-                            "@body('Build_Active_Device_IDs')",
-                            "@items('Untag_Inactive_Devices')?['DeviceId']"
-                          ]
-                        }
-                      }
-                    ]
-                  },
+                },
+                "Untag_Inactive_Devices": {
+                  "type": "Foreach",
+                  "foreach": "@body('Parse_Tagged_Devices')",
                   "actions": {
-                    "Remove_Tag": {
+                    "Check_If_Still_Active": {
                       "type": "If",
                       "expression": {
                         "and": [
                           {
-                            "equals": [
-                              "@parameters('DryRun')",
-                              false
-                            ]
+                            "not": {
+                              "contains": [
+                                "@body('Build_Active_Device_IDs')",
+                                "@items('Untag_Inactive_Devices')?['DeviceId']"
+                              ]
+                            }
                           }
                         ]
                       },
                       "actions": {
-                        "Remove_Tag_HTTP": {
+                        "Remove_Tag": {
                           "type": "Http",
                           "inputs": {
                             "uri": "https://api.security.microsoft.com/api/machines/@{items('Untag_Inactive_Devices')?['DeviceId']}/tags",
@@ -421,28 +424,35 @@
                       }
                     }
                   },
-                  "else": {
-                    "actions": {}
+                  "runAfter": {},
+                  "runtimeConfiguration": {
+                    "concurrency": {
+                      "repetitions": 5
+                    }
                   }
                 }
               },
-              "runAfter": {
-                "Build_Active_Device_IDs": [
-                  "Succeeded"
-                ],
-                "Build_Tagged_Device_IDs": [
-                  "Succeeded"
-                ]
+              "else": {
+                "actions": {}
               },
-              "runtimeConfiguration": {
-                "concurrency": {
-                  "repetitions": 5
-                }
+              "runAfter": {
+                "Send_Approval_Email": [ "Succeeded" ],
+                "Build_Active_Device_IDs": [ "Succeeded" ],
+                "Build_Tagged_Device_IDs": [ "Succeeded" ]
               }
             }
           }
         },
         "parameters": {
+          "$connections": {
+            "value": {
+              "office365": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('o365ConnectionName'))]",
+                "connectionName": "[variables('o365ConnectionName')]",
+                "id": "[subscriptionResourceId('Microsoft.Web/locations/managedApis', parameters('location'), 'office365')]"
+              }
+            }
+          },
           "TenantID": {
             "value": "[parameters('tenantId')]"
           },
@@ -458,14 +468,14 @@
           "TagName": {
             "value": "[variables('tagName')]"
           },
+          "ApprovalEmail": {
+            "value": "[parameters('approvalEmail')]"
+          },
           "RecurrenceInterval": {
             "value": "[parameters('recurrenceInterval')]"
           },
           "RecurrenceFrequency": {
             "value": "[parameters('recurrenceFrequency')]"
-          },
-          "DryRun": {
-            "value": "[parameters('dryRun')]"
           }
         }
       }
@@ -475,6 +485,10 @@
     "logicAppName": {
       "type": "string",
       "value": "[parameters('logicAppName')]"
+    },
+    "postDeploymentNote": {
+      "type": "string",
+      "value": "IMPORTANT: After deployment, go to the Logic App → API connections → authorize the Office 365 Outlook connection with your account."
     }
   }
 }
